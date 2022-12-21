@@ -335,6 +335,7 @@ dat
 Databricks
 databricks
 datacenter
+dataclass
 Datadog
 datadog
 Dataflow
@@ -411,6 +412,7 @@ Deserialize
 deserialize
 Deserialized
 deserialized
+deserializer
 deserializing
 dest
 dev
@@ -665,6 +667,8 @@ hoc
 homebrew
 honoured
 hookable
+hookimpl
+hookspec
 HostAliases
 Hostname
 hostname
@@ -1056,6 +1060,7 @@ pkill
 plaintext
 platformVersion
 pluggable
+pluggy
 plyvel
 png
 podName
@@ -1275,6 +1280,8 @@ serde
 serialise
 serializable
 SerializedDAG
+serializer
+serializers
 serverless
 ServiceAccount
 setattr
@@ -1483,6 +1490,8 @@ tooltips
 traceback
 tracebacks
 travis
+triage
+triaging
 triggerer
 triggerers
 trino

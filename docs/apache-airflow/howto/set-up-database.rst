@@ -32,7 +32,7 @@ By default, Airflow uses **SQLite**, which is intended for development purposes 
 
 Airflow supports the following database engine versions, so make sure which version you have. Old versions may not support all SQL statements.
 
-* PostgreSQL: 10, 11, 12, 13
+* PostgreSQL: 11, 12, 13, 14, 15
 * MySQL: 5.7, 8
 * MsSQL: 2017, 2019
 * SQLite: 3.15.0+
@@ -260,7 +260,7 @@ For more information regarding setup of the PostgreSQL connection, see `PostgreS
 
 
 
-.. spelling::
+.. spelling:word-list::
 
      hba
 
@@ -375,4 +375,4 @@ What's next?
 ------------
 
 By default, Airflow uses ``SequentialExecutor``, which does not provide parallelism. You should consider
-configuring a different :doc:`executor </executor/index>` for better performance.
+configuring a different :doc:`executor </core-concepts/executor/index>` for better performance.

@@ -21,6 +21,7 @@ import os
 import sys
 from enum import Enum
 
+from airflow_breeze.utils.exclude_from_matrix import excluded_combos
 from airflow_breeze.utils.github_actions import get_ga_output
 from airflow_breeze.utils.kubernetes_utils import get_kubernetes_python_combos
 from airflow_breeze.utils.path_utils import AIRFLOW_SOURCES_ROOT
@@ -53,7 +54,7 @@ from airflow_breeze.global_constants import (
     SelectiveUnitTestTypes,
     all_selective_test_types,
 )
-from airflow_breeze.utils.console import get_console
+from airflow_breeze.utils.console import get_stderr_console
 
 FULL_TESTS_NEEDED_LABEL = "full tests needed"
 DEBUG_CI_RESOURCES_LABEL = "debug ci resources"
@@ -103,7 +104,8 @@ CI_FILE_GROUP_MATCHES = HashableDict(
             r"^airflow/.*\.lock",
         ],
         FileGroupForCi.API_TEST_FILES: [
-            r"^airflow/api",
+            r"^airflow/api/",
+            r"^airflow/api_connexion/",
         ],
         FileGroupForCi.API_CODEGEN_FILES: [
             r"^airflow/api_connexion/openapi/v1\.yaml",
@@ -135,6 +137,7 @@ CI_FILE_GROUP_MATCHES = HashableDict(
             r"^chart/values\.json",
         ],
         FileGroupForCi.WWW_FILES: [
+            r"^airflow/www/.*\.ts[x]?$",
             r"^airflow/www/.*\.js[x]?$",
             r"^airflow/www/[^/]+\.json$",
             r"^airflow/www/.*\.lock$",
@@ -291,11 +294,17 @@ class SelectiveChecks:
 
     @cached_property
     def full_tests_needed(self) -> bool:
+        if not self._commit_ref:
+            get_stderr_console().print("[warning]Running everything as commit is missing[/]")
+            return True
         if self._github_event in [GithubEvents.PUSH, GithubEvents.SCHEDULE, GithubEvents.WORKFLOW_DISPATCH]:
-            get_console().print(f"[warning]Full tests needed because event is {self._github_event}[/]")
+            get_stderr_console().print(f"[warning]Full tests needed because event is {self._github_event}[/]")
+            return True
+        if len(self._matching_files(FileGroupForCi.ENVIRONMENT_FILES, CI_FILE_GROUP_MATCHES)) > 0:
+            get_stderr_console().print("[warning]Running everything because env files changed[/]")
             return True
         if FULL_TESTS_NEEDED_LABEL in self._pr_labels:
-            get_console().print(
+            get_stderr_console().print(
                 "[warning]Full tests needed because "
                 f"label '{FULL_TESTS_NEEDED_LABEL}' is in  {self._pr_labels}[/]"
             )
@@ -306,7 +315,7 @@ class SelectiveChecks:
     def python_versions(self) -> list[str]:
         return (
             CURRENT_PYTHON_MAJOR_MINOR_VERSIONS
-            if self._run_everything or self.full_tests_needed
+            if self.full_tests_needed
             else [DEFAULT_PYTHON_MAJOR_MINOR_VERSION]
         )
 
@@ -318,7 +327,7 @@ class SelectiveChecks:
     def all_python_versions(self) -> list[str]:
         return (
             ALL_PYTHON_MAJOR_MINOR_VERSIONS
-            if self._run_everything or self.full_tests_needed
+            if self.full_tests_needed
             else [DEFAULT_PYTHON_MAJOR_MINOR_VERSION]
         )
 
@@ -353,19 +362,46 @@ class SelectiveChecks:
 
     @cached_property
     def postgres_exclude(self) -> list[dict[str, str]]:
-        return [{"python-version": "3.7"}] if self.full_tests_needed else []
+        if not self.full_tests_needed:
+            # Only basic combination so we do not need to exclude anything
+            return []
+        return [
+            # Exclude all combinations that are repeating python/postgres versions
+            {"python-version": python_version, "postgres-version": postgres_version}
+            for python_version, postgres_version in excluded_combos(
+                CURRENT_PYTHON_MAJOR_MINOR_VERSIONS, CURRENT_POSTGRES_VERSIONS
+            )
+        ]
 
     @cached_property
     def mssql_exclude(self) -> list[dict[str, str]]:
-        return [{"python-version": "3.8"}] if self.full_tests_needed else []
+        if not self.full_tests_needed:
+            # Only basic combination so we do not need to exclude anything
+            return []
+        return [
+            # Exclude all combinations that are repeating python/mssql versions
+            {"python-version": python_version, "mssql-version": mssql_version}
+            for python_version, mssql_version in excluded_combos(
+                CURRENT_PYTHON_MAJOR_MINOR_VERSIONS, CURRENT_MSSQL_VERSIONS
+            )
+        ]
 
     @cached_property
     def mysql_exclude(self) -> list[dict[str, str]]:
-        return [{"python-version": "3.10"}] if self.full_tests_needed else []
+        if not self.full_tests_needed:
+            # Only basic combination so we do not need to exclude anything
+            return []
+        return [
+            # Exclude all combinations that are repeating python/mysql versions
+            {"python-version": python_version, "mysql-version": mysql_version}
+            for python_version, mysql_version in excluded_combos(
+                CURRENT_PYTHON_MAJOR_MINOR_VERSIONS, CURRENT_MYSQL_VERSIONS
+            )
+        ]
 
     @cached_property
     def sqlite_exclude(self) -> list[dict[str, str]]:
-        return [{"python-version": "3.9"}] if self.full_tests_needed else []
+        return []
 
     @cached_property
     def kubernetes_versions(self) -> list[str]:
@@ -398,37 +434,24 @@ class SelectiveChecks:
         self._match_files_with_regexps(matched_files, regexps)
         count = len(matched_files)
         if count > 0:
-            get_console().print(f"[warning]{match_group} matched {count} files.[/]")
-            get_console().print(matched_files)
+            get_stderr_console().print(f"[warning]{match_group} matched {count} files.[/]")
+            get_stderr_console().print(matched_files)
         else:
-            get_console().print(f"[warning]{match_group} did not match any file.[/]")
+            get_stderr_console().print(f"[warning]{match_group} did not match any file.[/]")
         return matched_files
 
-    @cached_property
-    def _run_everything(self) -> bool:
-        if not self._commit_ref:
-            get_console().print("[warning]Running everything as commit is missing[/]")
-            return True
-        if self.full_tests_needed:
-            get_console().print("[warning]Running everything as full tests are needed[/]")
-            return True
-        if len(self._matching_files(FileGroupForCi.ENVIRONMENT_FILES, CI_FILE_GROUP_MATCHES)) > 0:
-            get_console().print("[warning]Running everything because env files changed[/]")
-            return True
-        return False
-
     def _should_be_run(self, source_area: FileGroupForCi) -> bool:
-        if self._run_everything:
-            get_console().print(f"[warning]{source_area} enabled because we are running everything[/]")
+        if self.full_tests_needed:
+            get_stderr_console().print(f"[warning]{source_area} enabled because we are running everything[/]")
             return True
         matched_files = self._matching_files(source_area, CI_FILE_GROUP_MATCHES)
         if len(matched_files) > 0:
-            get_console().print(
+            get_stderr_console().print(
                 f"[warning]{source_area} enabled because it matched {len(matched_files)} changed files[/]"
             )
             return True
         else:
-            get_console().print(
+            get_stderr_console().print(
                 f"[warning]{source_area} disabled because it did not match any changed files[/]"
             )
             return False
@@ -480,7 +503,7 @@ class SelectiveChecks:
         count = len(matched_files)
         if count > 0:
             test_types.add(test_type.value)
-            get_console().print(f"[warning]{test_type} added because it matched {count} files[/]")
+            get_stderr_console().print(f"[warning]{test_type} added because it matched {count} files[/]")
         return matched_files
 
     def _get_test_types_to_run(self) -> list[str]:
@@ -505,11 +528,11 @@ class SelectiveChecks:
         remaining_files = set(all_source_files) - set(matched_files) - set(kubernetes_files)
         count_remaining_files = len(remaining_files)
         if count_remaining_files > 0:
-            get_console().print(
+            get_stderr_console().print(
                 f"[warning]We should run all tests. There are {count_remaining_files} changed "
                 "files that seems to fall into Core/Other category[/]"
             )
-            get_console().print(remaining_files)
+            get_stderr_console().print(remaining_files)
             candidate_test_types.update(all_selective_test_types())
         else:
             if "Providers" in candidate_test_types:
@@ -517,19 +540,19 @@ class SelectiveChecks:
                 if len(affected_providers) != 0:
                     candidate_test_types.remove("Providers")
                     candidate_test_types.add(f"Providers[{','.join(sorted(affected_providers))}]")
-            get_console().print(
+            get_stderr_console().print(
                 "[warning]There are no core/other files. Only tests relevant to the changed files are run.[/]"
             )
         sorted_candidate_test_types = list(sorted(candidate_test_types))
-        get_console().print("[warning]Selected test type candidates to run:[/]")
-        get_console().print(sorted_candidate_test_types)
+        get_stderr_console().print("[warning]Selected test type candidates to run:[/]")
+        get_stderr_console().print(sorted_candidate_test_types)
         return sorted_candidate_test_types
 
     @cached_property
     def test_types(self) -> str:
         if not self.run_tests:
             return ""
-        if self._run_everything:
+        if self.full_tests_needed:
             current_test_types = set(all_selective_test_types())
         else:
             current_test_types = set(self._get_test_types_to_run())
@@ -537,17 +560,11 @@ class SelectiveChecks:
             test_types_to_remove: set[str] = set()
             for test_type in current_test_types:
                 if test_type.startswith("Providers"):
-                    get_console().print(
+                    get_stderr_console().print(
                         f"[warning]Removing {test_type} because the target branch "
                         f"is {self._default_branch} and not main[/]"
                     )
                     test_types_to_remove.add(test_type)
-            if "Integration" in current_test_types:
-                get_console().print(
-                    "[warning]Removing 'Integration' because the target branch "
-                    f"is {self._default_branch} and not main[/]"
-                )
-                test_types_to_remove.add("Integration")
             current_test_types = current_test_types - test_types_to_remove
         return " ".join(sorted(current_test_types))
 

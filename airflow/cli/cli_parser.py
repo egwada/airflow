@@ -16,7 +16,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Command-line interface"""
+"""Command-line interface."""
 from __future__ import annotations
 
 import argparse
@@ -44,7 +44,7 @@ BUILD_DOCS = "BUILDING_AIRFLOW_DOCS" in os.environ
 
 
 def lazy_load_command(import_path: str) -> Callable:
-    """Create a lazy loader for command"""
+    """Create a lazy loader for command."""
     _, _, name = import_path.rpartition(".")
 
     def command(*args, **kwargs):
@@ -57,10 +57,10 @@ def lazy_load_command(import_path: str) -> Callable:
 
 
 class DefaultHelpParser(argparse.ArgumentParser):
-    """CustomParser to display help message"""
+    """CustomParser to display help message."""
 
     def _check_value(self, action, value):
-        """Override _check_value and check conditionally added command"""
+        """Override _check_value and check conditionally added command."""
         if action.dest == "subcommand" and value == "celery":
             executor = conf.get("core", "EXECUTOR")
             if executor not in (CELERY_EXECUTOR, CELERY_KUBERNETES_EXECUTOR):
@@ -105,7 +105,7 @@ class DefaultHelpParser(argparse.ArgumentParser):
         super()._check_value(action, value)
 
     def error(self, message):
-        """Override error and use print_instead of print_usage"""
+        """Override error and use print_instead of print_usage."""
         self.print_help()
         self.exit(2, f"\n{self.prog} command error: {message}, see help above.\n")
 
@@ -115,7 +115,7 @@ _UNSET = object()
 
 
 class Arg:
-    """Class to keep information about command line argument"""
+    """Class to keep information about command line argument."""
 
     def __init__(
         self,
@@ -141,7 +141,7 @@ class Arg:
             self.kwargs[k] = v
 
     def add_to_parser(self, parser: argparse.ArgumentParser):
-        """Add this argument to an ArgumentParser"""
+        """Add this argument to an ArgumentParser."""
         parser.add_argument(*self.flags, **self.kwargs)
 
 
@@ -163,12 +163,12 @@ def positive_int(*, allow_zero):
 
 
 def string_list_type(val):
-    """Parses comma-separated list and returns list of string (strips whitespace)"""
+    """Parses comma-separated list and returns list of string (strips whitespace)."""
     return [x.strip() for x in val.split(",")]
 
 
 def string_lower_type(val):
-    """Lowers arg"""
+    """Lowers arg."""
     if not val:
         return
     return val.strip().lower()
@@ -433,6 +433,13 @@ ARG_IMGCAT = Arg(("--imgcat",), help="Displays graph using the imgcat tool.", ac
 ARG_RUN_ID = Arg(("-r", "--run-id"), help="Helps to identify this run")
 ARG_CONF = Arg(("-c", "--conf"), help="JSON string that gets pickled into the DagRun's conf attribute")
 ARG_EXEC_DATE = Arg(("-e", "--exec-date"), help="The execution date of the DAG", type=parsedate)
+ARG_REPLACE_MICRO = Arg(
+    ("--no-replace-microseconds",),
+    help="whether microseconds should be zeroed",
+    dest="replace_microseconds",
+    action="store_false",
+    default=True,
+)
 
 # db
 ARG_DB_TABLES = Arg(
@@ -898,6 +905,10 @@ ARG_OPTION = Arg(
     ("option",),
     help="The option name",
 )
+ARG_OPTIONAL_SECTION = Arg(
+    ("--section",),
+    help="The section name",
+)
 
 # kubernetes cleanup-pods
 ARG_NAMESPACE = Arg(
@@ -982,7 +993,7 @@ ALTERNATIVE_CONN_SPECS_ARGS = [
 
 
 class ActionCommand(NamedTuple):
-    """Single CLI command"""
+    """Single CLI command."""
 
     name: str
     help: str
@@ -993,7 +1004,7 @@ class ActionCommand(NamedTuple):
 
 
 class GroupCommand(NamedTuple):
-    """ClI command with subcommands"""
+    """ClI command with subcommands."""
 
     name: str
     help: str
@@ -1082,7 +1093,7 @@ DAGS_COMMANDS = (
         name="trigger",
         help="Trigger a DAG run",
         func=lazy_load_command("airflow.cli.commands.dag_command.dag_trigger"),
-        args=(ARG_DAG_ID, ARG_SUBDIR, ARG_RUN_ID, ARG_CONF, ARG_EXEC_DATE, ARG_VERBOSE),
+        args=(ARG_DAG_ID, ARG_SUBDIR, ARG_RUN_ID, ARG_CONF, ARG_EXEC_DATE, ARG_VERBOSE, ARG_REPLACE_MICRO),
     ),
     ActionCommand(
         name="delete",
@@ -1816,7 +1827,7 @@ CONFIG_COMMANDS = (
         name="list",
         help="List options for the configuration",
         func=lazy_load_command("airflow.cli.commands.config_command.show_config"),
-        args=(ARG_COLOR, ARG_VERBOSE),
+        args=(ARG_OPTIONAL_SECTION, ARG_COLOR, ARG_VERBOSE),
     ),
 )
 
@@ -2148,7 +2159,7 @@ class AirflowHelpFormatter(argparse.HelpFormatter):
 
 @lru_cache(maxsize=None)
 def get_parser(dag_parser: bool = False) -> argparse.ArgumentParser:
-    """Creates and returns command line argument parser"""
+    """Creates and returns command line argument parser."""
     parser = DefaultHelpParser(prog="airflow", formatter_class=AirflowHelpFormatter)
     subparsers = parser.add_subparsers(dest="subcommand", metavar="GROUP_OR_COMMAND")
     subparsers.required = True
@@ -2163,10 +2174,10 @@ def get_parser(dag_parser: bool = False) -> argparse.ArgumentParser:
 
 
 def _sort_args(args: Iterable[Arg]) -> Iterable[Arg]:
-    """Sort subcommand optional args, keep positional args"""
+    """Sort subcommand optional args, keep positional args."""
 
     def get_long_option(arg: Arg):
-        """Get long option from Arg.flags"""
+        """Get long option from Arg.flags."""
         return arg.flags[0] if len(arg.flags) == 1 else arg.flags[1]
 
     positional, optional = partition(lambda x: x.flags[0].startswith("-"), args)

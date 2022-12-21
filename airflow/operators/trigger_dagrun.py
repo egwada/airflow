@@ -45,8 +45,8 @@ if TYPE_CHECKING:
 
 class TriggerDagRunLink(BaseOperatorLink):
     """
-    Operator link for TriggerDagRunOperator. It allows users to access
-    DAG triggered by task using TriggerDagRunOperator.
+    Operator link for TriggerDagRunOperator.
+    It allows users to access DAG triggered by task using TriggerDagRunOperator.
     """
 
     name = "Triggered DAG"
@@ -61,14 +61,14 @@ class TriggerDagRunLink(BaseOperatorLink):
 
 class TriggerDagRunOperator(BaseOperator):
     """
-    Triggers a DAG run for a specified ``dag_id``
+    Triggers a DAG run for a specified ``dag_id``.
 
     :param trigger_dag_id: The dag_id to trigger (templated).
     :param trigger_run_id: The run ID to use for the triggered DAG run (templated).
         If not provided, a run ID will be automatically generated.
     :param conf: Configuration for the DAG run (templated).
     :param execution_date: Execution date for the dag (templated).
-    :param reset_dag_run: Whether or not clear existing dag run if already exists.
+    :param reset_dag_run: Whether clear existing dag run if already exists.
         This is useful when backfill or rerun an existing dag run.
         This only resets (not recreates) the dag run.
         Dag run conf is immutable and will not be reset on rerun of an existing dag run.
@@ -79,6 +79,7 @@ class TriggerDagRunOperator(BaseOperator):
         (default: 60)
     :param allowed_states: List of allowed states, default is ``['success']``.
     :param failed_states: List of failed or dis-allowed states, default is ``None``.
+    :param notes: Set a custom note for the newly created DagRun.
     """
 
     template_fields: Sequence[str] = ("trigger_dag_id", "trigger_run_id", "execution_date", "conf")
@@ -156,7 +157,7 @@ class TriggerDagRunOperator(BaseOperator):
                 dag_bag = DagBag(dag_folder=dag_model.fileloc, read_dags_from_db=True)
                 dag = dag_bag.get_dag(self.trigger_dag_id)
                 dag.clear(start_date=parsed_execution_date, end_date=parsed_execution_date)
-                dag_run = DagRun.find(dag_id=dag.dag_id, run_id=run_id)[0]
+                dag_run = e.dag_run
             else:
                 raise e
         if dag_run is None:
